@@ -73,7 +73,7 @@ jobs:
 
       - name: 签到成功邮件通知
         if: success()
-        uses: dawidd6/action-send-mail@v4
+        uses: dawidd6/action-send-mail@v17
         with:
           server_address: ${{ secrets.EMAIL_HOST }}
           server_port: ${{ secrets.EMAIL_PORT }}
@@ -94,7 +94,7 @@ jobs:
 
       - name: 签到失败邮件通知
         if: failure()
-        uses: dawidd6/action-send-mail@v4
+        uses: dawidd6/action-send-mail@v17
         with:
           server_address: ${{ secrets.EMAIL_HOST }}
           server_port: ${{ secrets.EMAIL_PORT }}
