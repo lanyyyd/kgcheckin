@@ -1,23 +1,28 @@
 name: main
+
 on:
   workflow_dispatch:
   # push:
   schedule:
     - cron: '10 17 * * *'
+
 permissions:
   contents: read
+
 jobs:
   run:
     runs-on: ubuntu-latest
     steps:
       - name: 检出仓库
         uses: actions/checkout@v6
+
       - name: 创建node
         uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: 'npm'
           cache-dependency-path: ./api/package-lock.json
+
       - name: 🔧 检查GitHub CLI
         run: |
           if ! command -v gh >/dev/null 2>&1; then
@@ -28,6 +33,7 @@ jobs:
             sudo apt install gh -y
           fi
           gh --version
+
       - name: Cache node_modules in api directory
         id: cache-npm
         uses: actions/cache@v5
@@ -36,12 +42,73 @@ jobs:
           key: ${{ runner.os }}-node-${{ hashFiles('./api/package-lock.json') }}
           restore-keys: |
             ${{ runner.os }}-node-
+
       - name: 安装依赖
         run: npm run install
         if: ${{ steps.cache-npm.outputs.cache-hit != 'true' }}
+
       - name: 签到
+        id: checkin
         run: npm run main
         env:
           USERINFO: ${{ secrets.USERINFO }}
           PAT: ${{ secrets.PAT }}
           GITHUB_REPOSITORY: ${{ github.repository }}
+
+      # ========== 邮件提醒配置开始 ==========
+      # 方案：使用 dawidd6/action-send-mail
+      # 需要在仓库 Settings -> Secrets and variables -> Actions 中添加以下 Secrets：
+      #   EMAIL_HOST     - SMTP服务器地址，如 smtp.qq.com
+      #   EMAIL_PORT     - SMTP端口，如 587
+      #   EMAIL_USER     - 发件邮箱账号
+      #   EMAIL_PASS     - 邮箱授权码（不是登录密码！）
+      #   EMAIL_TO       - 收件人邮箱（可填多个，用逗号分隔）
+      #
+      # 常见邮箱 SMTP 设置参考：
+      #   QQ邮箱:    smtp.qq.com:587
+      #   163邮箱:   smtp.163.com:465
+      #   Gmail:     smtp.gmail.com:587
+      #   Outlook:   smtp.office365.com:587
+      # ==========
+
+      - name: 签到成功邮件通知
+        if: success()
+        uses: dawidd6/action-send-mail@v4
+        with:
+          server_address: ${{ secrets.EMAIL_HOST }}
+          server_port: ${{ secrets.EMAIL_PORT }}
+          username: ${{ secrets.EMAIL_USER }}
+          password: ${{ secrets.EMAIL_PASS }}
+          subject: "✅ 酷狗签到成功 - ${{ github.repository }}"
+          to: ${{ secrets.EMAIL_TO }}
+          from: "酷狗签到助手 <${{ secrets.EMAIL_USER }}>"
+          html_body: |
+            <h2>🎉 酷狗概念VIP签到成功</h2>
+            <p><strong>仓库：</strong>${{ github.repository }}</p>
+            <p><strong>运行时间：</strong>${{ github.event.head_commit.timestamp || github.event.schedule }}</p>
+            <p><strong>运行状态：</strong>✅ 成功</p>
+            <p><a href="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}">点击查看详细日志</a></p>
+            <hr>
+            <p style="color:#888;font-size:12px;">本邮件由 GitHub Actions 自动发送</p>
+          convert_markdown: false
+
+      - name: 签到失败邮件通知
+        if: failure()
+        uses: dawidd6/action-send-mail@v4
+        with:
+          server_address: ${{ secrets.EMAIL_HOST }}
+          server_port: ${{ secrets.EMAIL_PORT }}
+          username: ${{ secrets.EMAIL_USER }}
+          password: ${{ secrets.EMAIL_PASS }}
+          subject: "❌ 酷狗签到失败 - ${{ github.repository }}"
+          to: ${{ secrets.EMAIL_TO }}
+          from: "酷狗签到助手 <${{ secrets.EMAIL_USER }}>"
+          html_body: |
+            <h2>⚠️ 酷狗概念VIP签到失败</h2>
+            <p><strong>仓库：</strong>${{ github.repository }}</p>
+            <p><strong>运行状态：</strong>❌ 失败</p>
+            <p><strong>失败步骤：</strong>${{ steps.checkin.outcome == 'failure' && '签到执行' || '其他步骤' }}</p>
+            <p><a href="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}">点击查看详细日志并排查问题</a></p>
+            <hr>
+            <p style="color:#888;font-size:12px;">本邮件由 GitHub Actions 自动发送</p>
+          convert_markdown: false
