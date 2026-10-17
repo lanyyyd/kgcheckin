@@ -18,15 +18,15 @@ on:
       clientver:
         description: '客户端版本号（lite 11440 / APK 11600）'
         required: false
-        default: '11440'
+        default: '20489'
       appid:
         description: 'appid'
         required: false
-        default: '3116'
+        default: '1005'
       salt:
-        description: '签名盐（lite=LnT6... / 音乐=OIlw...）'
+        description: '签名盐（音乐=OIlw... / lite=LnT6...）'
         required: false
-        default: ''
+        default: 'OIlwieks28dk2k092lksi2UIkp'
   schedule:
     - cron: '15 17 * * *'   # UTC 17:15 = 北京时间 01:15，错开原签到任务
 
@@ -49,9 +49,9 @@ jobs:
           KUGOU_USERINFO: ${{ secrets.USERINFO }}
           KG_MAX_AD: ${{ inputs.max_ad || '20' }}
           KG_AD_INTERVAL: ${{ inputs.interval || '32000' }}
-          KG_CLIENTVER: ${{ inputs.clientver || '11440' }}
-          KG_APPID: ${{ inputs.appid || '3116' }}
-          KG_SALT: ${{ inputs.salt || 'LnT6xpN3khm36zse0QzvmgTZ3waWdRSA' }}
+          KG_CLIENTVER: ${{ inputs.clientver || '20489' }}
+          KG_APPID: ${{ inputs.appid || '1005' }}
+          KG_SALT: ${{ inputs.salt || 'OIlwieks28dk2k092lksi2UIkp' }}
           KG_AD_ID: ''
         run: |
           ARGS=""
