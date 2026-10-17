@@ -175,13 +175,14 @@ async function stepAd(acc) {
   const remain = Number(d.remain ?? 0);
   const total = Number(d.total ?? 0);
   const done = Number(d.done ?? 0);
-  const hour = Number(d.get_vip_hour ?? 0);
-  log(`    今日已领 ${done} 次，剩余 ${remain} 次，单次奖励 ${hour} 小时`);
-  if (DRY) return { remain, total, done, hour, claimed: 0 };
+  const got = String(d.get_vip_hour ?? ''); // 已累计获得的小时数（字符串）
+  const nextHour = Number(d.next_vip_hour ?? 0);
+  log(`    今日已领 ${done} 次，累计 ${got || '?'} 小时（≈${(Number(got) / 24 || 0).toFixed(2)} 天），剩余 ${remain} 次，下次奖励 ${nextHour} 小时`);
+  if (DRY) return { remain, total, done, got, claimed: 0 };
   if (remain <= 0) {
     if (process.env.KG_FORCE_AD !== '1') {
       log('    配额已用完，跳过（要强制试一次发奖设 KG_FORCE_AD=1）');
-      return { remain, total, done, hour, claimed: 0 };
+      return { remain, total, done, got, claimed: 0 };
     }
     log('    配额显示已用完，KG_FORCE_AD=1 强制试一次，用于确认接口是否可用');
   }
@@ -204,7 +205,7 @@ async function stepAd(acc) {
     const dd = r.data?.data || {};
     if (ok(r.data)) {
       claimed++;
-      log(`    第${i}次 上报成功：+${dd.award_vip_hour ?? '?'}h，剩余 ${dd.remain ?? '?'} 次，累计 ${dd.remain_vip_hour ?? '?'}h`);
+      log(`    第${i}次 上报成功：本次 +${dd.award_vip_hour ?? '?'}h，今日累计 ${dd.get_vip_hour ?? '?'}h，剩余 ${dd.remain ?? '?'} 次`);
     } else if (r.data?.error_code === 30002) {
       log('    服务端提示：今日奖励次数已领完'); break;
     } else {
@@ -213,7 +214,7 @@ async function stepAd(acc) {
     }
     if (i < rounds) await sleep(C.adInterval);
   }
-  return { remain, total, done, hour, claimed };
+  return { remain, total, done, got, claimed };
 }
 
 /* ---------------- 2) 听歌领畅听 VIP ---------------- */
