@@ -23,6 +23,10 @@ on:
         description: 'appid'
         required: false
         default: '3116'
+      salt:
+        description: '签名盐（lite=LnT6... / 音乐=OIlw...）'
+        required: false
+        default: ''
   schedule:
     - cron: '15 17 * * *'   # UTC 17:15 = 北京时间 01:15，错开原签到任务
 
@@ -47,6 +51,7 @@ jobs:
           KG_AD_INTERVAL: ${{ inputs.interval || '32000' }}
           KG_CLIENTVER: ${{ inputs.clientver || '11440' }}
           KG_APPID: ${{ inputs.appid || '3116' }}
+          KG_SALT: ${{ inputs.salt || 'LnT6xpN3khm36zse0QzvmgTZ3waWdRSA' }}
           KG_AD_ID: ''
         run: |
           ARGS=""
