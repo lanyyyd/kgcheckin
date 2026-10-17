@@ -1,0 +1,112 @@
+name: 构建去广告APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      apk_url:
+        description: '原始 APK 下载地址（留空则用 release build-input 里的 original.apk）'
+        required: false
+        default: ''
+      only_build:
+        description: '只构建不发布 Release'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: 下载原始 APK
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          mkdir -p input
+          URL="${{ inputs.apk_url }}"
+          if [ -z "$URL" ]; then
+            TAG="build-input"
+            ASSET_ID=$(curl -sL -H "Authorization: Bearer $GH_TOKEN" \
+              "${{ github.api_url }}/repos/${{ github.repository }}/releases/tags/$TAG" \
+              | python3 -c "import sys,json;d=json.load(sys.stdin);print([a['id'] for a in d.get('assets',[]) if a['name']=='original.apk'][0])")
+            echo "asset_id=$ASSET_ID"
+            curl -sL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/octet-stream" \
+              "${{ github.api_url }}/repos/${{ github.repository }}/releases/assets/$ASSET_ID" -o input/original.apk
+          else
+            curl -L --retry 3 "$URL" -o input/original.apk
+          fi
+          ls -lh input/original.apk
+          python3 - <<'PY'
+          import zipfile
+          z=zipfile.ZipFile('input/original.apk')
+          names=z.namelist()
+          assert 'AndroidManifest.xml' in names and 'classes.dex' in names, '不是有效 APK'
+          print('dex 数量:', len([n for n in names if n.startswith('classes') and n.endswith('.dex')]))
+          PY
+
+      - name: 准备 apktool
+        run: |
+          curl -sL -o apktool.jar https://github.com/iBotPeaches/Apktool/releases/download/v2.10.0/apktool_2.10.0.jar
+          printf '#!/bin/sh\nexec java -jar %s/apktool.jar "$@"\n' "$PWD" > apktool
+          chmod +x apktool
+          ./apktool --version
+
+      - name: 解包
+        run: ./apktool d -f -o out input/original.apk
+
+      - name: 打补丁
+        run: python3 patch/apply_patch.py out
+
+      - name: 校验补丁
+        run: |
+          grep -A6 -E "\.method public static (E2|J2)\(\)Z" out/smali_classes4/com/kugou/common/environment/a.smali
+          grep -A6 "\.method private static b()I" out/smali_classes5/com/kugou/android/ads/b.smali
+
+      - name: 重建 APK
+        run: ./apktool b out -o unsigned.apk
+
+      - name: 签名
+        run: |
+          curl -sL -o signer.jar https://github.com/patrickfav/uber-apk-signer/releases/download/v1.3.0/uber-apk-signer-1.3.0.jar
+          mkdir -p dist
+          java -jar signer.jar --apks unsigned.apk --out dist
+          ls -lh dist
+
+      - name: 重命名
+        run: |
+          SRC=$(ls dist/*.apk | head -1)
+          cp "$SRC" "kugou-noads-signed.apk"
+          ls -lh kugou-noads-signed.apk
+          sha256sum kugou-noads-signed.apk | tee sha256.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kugou-noads-signed
+          path: |
+            kugou-noads-signed.apk
+            sha256.txt
+          retention-days: 7
+
+      - name: 附加到 Release
+        if: ${{ inputs.only_build == false }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="noads-$(date +%Y%m%d-%H%M)"
+          curl -sL -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "${{ github.api_url }}/repos/${{ github.repository }}/releases" \
+            -d "{\"tag_name\":\"$TAG\",\"name\":\"去广告版 $TAG\",\"prerelease\":true}" > rel.json
+          UP=$(python3 -c "import json;print(json.load(open('rel.json'))['upload_url'].split('{')[0])")
+          curl -sL -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Content-Type: application/octet-stream" \
+            "$UP?name=kugou-noads-signed.apk" --data-binary @kugou-noads-signed.apk > /dev/null
+          echo "release: $TAG"
