@@ -23,6 +23,10 @@ on:
         description: 'appid'
         required: false
         default: '1005'
+      force_ad:
+        description: '配额为0时也强制上报一次（诊断用）'
+        required: false
+        default: '0'
       salt:
         description: '签名盐（音乐=OIlw... / lite=LnT6...）'
         required: false
@@ -53,6 +57,7 @@ jobs:
           KG_APPID: ${{ inputs.appid || '1005' }}
           KG_SALT: ${{ inputs.salt || 'OIlwieks28dk2k092lksi2UIkp' }}
           KG_AD_ID: ''
+          KG_FORCE_AD: ${{ inputs.force_ad || '0' }}
         run: |
           ARGS=""
           if [ "${{ inputs.dry }}" = "true" ]; then ARGS="--dry"; fi
