@@ -91,9 +91,21 @@ async function call(acc, method, apiPath, { query = {}, body = '' } = {}) {
   const url = new URL(BASE + apiPath);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
 
-  const opt = { method, headers: { 'User-Agent': 'KuGouConcept/5.3.0 (Android)' } };
+  // 关键：酷狗网关会从请求头读取设备标识做会话校验，只放在 query 里会返回 51002 未登录
+  const headers = {
+    'User-Agent': 'KuGouConcept/5.3.0 (Android)',
+    dfid: params.dfid || '-',
+    mid: params.mid,
+    clienttime: params.clienttime,
+    'kg-rc': '1',
+    'kg-thash': '5d816a0',
+    'kg-rec': '1',
+    'kg-rf': 'B9EDA08A64250DEFFBCADDEE00F8F25F',
+  };
+
+  const opt = { method, headers };
   if (method === 'POST') {
-    opt.headers['Content-Type'] = 'application/json';
+    headers['Content-Type'] = 'application/json';
     opt.body = body;
   }
   const res = await fetch(url, opt);
