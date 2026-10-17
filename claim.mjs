@@ -31,10 +31,13 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const BASE = 'https://gateway.kugou.com';
 
+// 实测结论：USERINFO 里的 token 是「酷狗音乐」体系的凭证，
+// 必须用 appid=1005 / clientver=20489 / salt=OIlwieks28dk2k092lksi2UIkp 才能通过鉴权；
+// 概念版（appid=3116 + LnT6…）会返回 51002 未登录。
 const C = {
-  appid: process.env.KG_APPID || '3116',
-  clientver: process.env.KG_CLIENTVER || '11600',
-  salt: process.env.KG_SALT || 'LnT6xpN3khm36zse0QzvmgTZ3waWdRSA',
+  appid: process.env.KG_APPID || '1005',
+  clientver: process.env.KG_CLIENTVER || '20489',
+  salt: process.env.KG_SALT || 'OIlwieks28dk2k092lksi2UIkp',
   adId: process.env.KG_AD_ID ?? '',
   adInterval: Number(process.env.KG_AD_INTERVAL || 32000),
   maxAd: Number(process.env.KG_MAX_AD || 20),
@@ -134,9 +137,15 @@ const brief = (d, keys) => {
   const code = d.error_code ?? d.errcode;
   const out = { status: d.status, error_code: code, errmsg: d.errmsg ?? d.error ?? d.error_msg };
   if (HINTS[code]) out.hint = HINTS[code];
-  if (d.data && typeof d.data === 'object' && keys) {
-    out.data = {};
-    for (const k of keys) if (d.data[k] !== undefined) out.data[k] = d.data[k];
+  if (d.data !== undefined && d.data !== '' && d.data !== null) {
+    if (typeof d.data !== 'object') {
+      out.data = d.data;
+    } else if (keys) {
+      out.data = {};
+      for (const k of keys) if (d.data[k] !== undefined) out.data[k] = d.data[k];
+    } else {
+      out.data = d.data;
+    }
   }
   return out;
 };
@@ -161,7 +170,7 @@ async function stepAd(acc) {
   const total = Number(d.total ?? 0);
   const done = Number(d.done ?? 0);
   const hour = Number(d.get_vip_hour ?? 0);
-  log(`    今日配额 ${done}/${total}，剩余 ${remain} 次，本次奖励约 ${hour} 小时`);
+  log(`    今日已领 ${done} 次，剩余 ${remain} 次，单次奖励 ${hour} 小时`);
   if (DRY) return { remain, total, done, hour, claimed: 0 };
   if (remain <= 0) { log('    配额已用完，跳过'); return { remain, total, done, hour, claimed: 0 }; }
 
