@@ -47,17 +47,19 @@ const now = () => Math.floor(Date.now() / 1000);
 const log = (...a) => console.log(...a);
 const j = (o) => JSON.stringify(o);
 
-/* ---------------- 设备指纹（同一份 token 复用同一套指纹，避免风控） ---------------- */
+/* ---------------- 设备指纹 ----------------
+ * 与 kgcheckin / KuGouMusicApi 完全一致：
+ *   dfid = cookie.dfid || '-'
+ *   mid  = md5(dfid) + md5(dfid)[0:7]
+ *   uuid = md5(dfid + mid)
+ * token 与这套指纹绑定，随便换 mid 会直接返回 51002 未登录。
+ */
 function device() {
-  const f = path.join(__dirname, '.device.json');
-  let d = {};
-  try { d = JSON.parse(fs.readFileSync(f, 'utf8')); } catch {}
-  const rnd = (n) => crypto.randomBytes(n).toString('hex');
-  d.mid = process.env.KG_MID || d.mid || rnd(16);
-  d.dfid = process.env.KG_DFID || d.dfid || '-' ;
-  d.uuid = process.env.KG_UUID || d.uuid || crypto.randomUUID();
-  try { fs.writeFileSync(f, JSON.stringify(d, null, 2)); } catch {}
-  return d;
+  const dfid = process.env.KG_DFID || '-';
+  const h = md5(dfid);
+  const mid = process.env.KG_MID || (h + h.slice(0, 7));
+  const uuid = process.env.KG_UUID || md5(dfid + mid);
+  return { dfid, mid, uuid };
 }
 
 /* ---------------- 签名：md5(salt + 按 key 字典序的 k=v 拼接 + body + salt) ---------------- */
