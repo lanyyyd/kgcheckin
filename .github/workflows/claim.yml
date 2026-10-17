@@ -1,0 +1,44 @@
+name: 概念版领取
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry:
+        description: '演练模式（只查状态不领取）'
+        type: boolean
+        default: false
+      max_ad:
+        description: '单账号最多广告上报次数'
+        required: false
+        default: '20'
+      interval:
+        description: '广告上报间隔（毫秒）'
+        required: false
+        default: '32000'
+  schedule:
+    - cron: '15 17 * * *'   # UTC 17:15 = 北京时间 01:15，错开原签到任务
+
+permissions:
+  contents: read
+
+jobs:
+  claim:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: 执行领取
+        env:
+          KUGOU_USERINFO: ${{ secrets.USERINFO }}
+          KG_MAX_AD: ${{ inputs.max_ad || '20' }}
+          KG_AD_INTERVAL: ${{ inputs.interval || '32000' }}
+          KG_AD_ID: ''
+        run: |
+          ARGS=""
+          if [ "${{ inputs.dry }}" = "true" ]; then ARGS="--dry"; fi
+          node claim.mjs $ARGS
