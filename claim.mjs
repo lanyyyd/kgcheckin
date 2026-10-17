@@ -163,7 +163,13 @@ async function stepAd(acc) {
   log('\n[1] 看广告领畅听VIP');
   const st = await call(acc, 'GET', '/youth/v2/ad/play_status', { query: { is_gradient: '1' } });
   const s = brief(st.data, ['total', 'done', 'remain', 'get_vip_hour', 'next_vip_hour', 'mode_status', 'level']);
-  log('    play_status ->', j(s));
+  log('    play_status(is_gradient=1) ->', j(s));
+
+  // 探测是否存在第二套配额（不带 is_gradient）
+  const st0 = await call(acc, 'GET', '/youth/v2/ad/play_status', { query: {} });
+  if (ok(st0.data)) {
+    log('    play_status(默认) ->', j(brief(st0.data, ['total', 'done', 'remain', 'get_vip_hour', 'next_vip_hour', 'mode_status', 'level'])));
+  }
 
   const d = st.data?.data || {};
   const remain = Number(d.remain ?? 0);
@@ -236,21 +242,43 @@ async function stepFreeMode(acc) {
   log('    开启全天畅听 ->', j(brief(r.data)));
 }
 
-/* ---------------- 4) 早间畅听 ---------------- */
+/* ---------------- 4) 早间畅听 / 签到 / 新人分期福利 ---------------- */
 async function stepMorning(acc) {
-  log('\n[4] 早间畅听');
+  log('\n[4] 早间畅听 / 签到状态');
   const sf = await call(acc, 'GET', '/concepts/v1/free_mode/secondfloor_info');
   const data = sf.data?.data || {};
-  const token = data.token_vip_morning || data.token || '';
-  log('    secondfloor_info ->', j(brief(sf.data)), token ? '（已拿到 token）' : '（无 token）');
-  if (DRY) return;
-  if (!token) { log('    今日不可领或已领，跳过'); return; }
 
-  const day = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
-  const r = await call(acc, 'POST', '/concepts/v1/free_mode/receive_vip_morning', {
-    query: { token_vip_morning: token }, body: j({ date: day }),
-  });
-  log('    领取 ->', j(brief(r.data)));
+  const daily = data.daily_vip || {};
+  if (daily.received_today !== undefined) {
+    log(`    天天签到领VIP：今日${daily.received_today ? '已领' : '未领'}`);
+  }
+  const sign = data.vip_signin || {};
+  if (sign.had_received !== undefined) {
+    log(`    新人分期福利：累计 ${sign.total_freemod_vip_days_received || '?'} 天，current_period=${sign.current_period_id}`);
+    for (const p of sign.signin_list || []) {
+      log(`      period ${p.period_id} ${p.period_title} ${p.vip_days}天 status=${p.receive_status} (${p.receive_date})`);
+    }
+  }
+
+  const token = data.token_vip_morning || data.token || '';
+  if (token && !DRY) {
+    const day = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
+    const r = await call(acc, 'POST', '/concepts/v1/free_mode/receive_vip_morning', {
+      query: { token_vip_morning: token }, body: j({ date: day }),
+    });
+    log('    早间畅听领取 ->', j(brief(r.data)));
+  }
+
+  // 新人分期福利：status != 1 的期数逐个尝试（默认关闭，KG_CLAIM_PERIODS=1 开启）
+  if (process.env.KG_CLAIM_PERIODS === '1' && !DRY) {
+    for (const p of (sign.signin_list || []).filter((x) => x.receive_status !== 1).slice(0, 3)) {
+      const r = await call(acc, 'POST', '/youth/v1/activity/receive_new_user_vip', {
+        body: j({ period_id: p.period_id }),
+      });
+      log(`    分期 ${p.period_id} 领取 ->`, j(brief(r.data)));
+      await sleep(800);
+    }
+  }
 }
 
 /* ---------------- 5) 365 福利 ---------------- */
