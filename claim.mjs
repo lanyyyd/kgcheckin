@@ -178,10 +178,16 @@ async function stepAd(acc) {
   const hour = Number(d.get_vip_hour ?? 0);
   log(`    今日已领 ${done} 次，剩余 ${remain} 次，单次奖励 ${hour} 小时`);
   if (DRY) return { remain, total, done, hour, claimed: 0 };
-  if (remain <= 0) { log('    配额已用完，跳过'); return { remain, total, done, hour, claimed: 0 }; }
+  if (remain <= 0) {
+    if (process.env.KG_FORCE_AD !== '1') {
+      log('    配额已用完，跳过（要强制试一次发奖设 KG_FORCE_AD=1）');
+      return { remain, total, done, hour, claimed: 0 };
+    }
+    log('    配额显示已用完，KG_FORCE_AD=1 强制试一次，用于确认接口是否可用');
+  }
 
   let claimed = 0;
-  const rounds = Math.min(remain, C.maxAd);
+  const rounds = remain > 0 ? Math.min(remain, C.maxAd) : 1;
   for (let i = 1; i <= rounds; i++) {
     // 注意：play_start / play_end 是毫秒时间戳（源码 t.java 用 System.currentTimeMillis()）
     const endMs = Date.now();
