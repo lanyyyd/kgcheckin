@@ -96,3 +96,32 @@ Java.use('com.kugou.android.lite.getvip.VIPActivityModeManager').q.implementatio
 | 付费歌曲播放 | ❌ | ❌ 服务端鉴权，改本地无效 |
 
 注意最后一行：**免广告可以做，免付费不行**。VIP 歌曲的播放地址是服务端按账号状态签发的，客户端把自己标成 VIP 也拿不到授权，最多是 UI 欺骗。
+
+## 七、实测：改包后登录被判定"破解版"
+
+现象：装上重签名的 APK，点登录 → 默认浏览器打开
+`https://activity.kugou.com/voo/v-ddd50401/index.html`，页面提示「当前版本属于破解版，请先卸载后安装正版」。
+
+定位结论：
+
+1. 这个 URL **不在 APK 里**（全量搜 `v-ddd50401`、`voo/v-` 均无命中），说明它由**服务端下发**。
+2. 客户端唯一的承接点是登录响应里的 `jump_url` 字段：
+   `com.kugou.common.useraccount.entity.UserData.jumpUrl` → `UserLogin` 里
+   `bundle.putString("web_url", userData.getJumpUrl())` → 用 `kugou@common@KGFlexoWebActivity` 打开。
+3. 也就是说：**这是服务端反篡改**（客户端上报签名/环境，服务端比对后下发提示页），不是本地校验。
+   改包必然换签名 → 必然触发；想靠改本地代码彻底绕过不现实。
+
+已加入第 4 个补丁（`patch/apply_patch.py`）：
+
+```smali
+.method public getJumpUrl()Ljava/lang/String;
+    .locals 1
+    const/4 v0, 0x0
+    return-object v0
+.end method
+```
+
+作用是把所有 `jump_url` 跳转（包括破解版提示页、实名认证页）一律屏蔽。
+局限：如果服务端连 token 一起拒绝下发，光屏蔽跳转没用，登录仍然失败。
+
+**结论：改包这条路走不通就换方案 B（Frida / LSPosed）——官方包签名不变，服务端不会判定破解，再在运行时把 `E2/J2` 置真、广告等级置 8 即可去广告。**
