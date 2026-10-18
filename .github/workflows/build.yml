@@ -71,6 +71,9 @@ jobs:
         run: |
           grep -A6 -E "\.method public static (E2|J2)\(\)Z" out/smali_classes4/com/kugou/common/environment/a.smali
           grep -A6 "\.method private static b()I" out/smali_classes5/com/kugou/android/ads/b.smali
+          UD=$(find out -path "*useraccount/entity/UserData.smali" | head -1)
+          echo "UserData: $UD"
+          grep -A6 "getJumpUrl()Ljava/lang/String;" "$UD"
 
       - name: 重建 APK
         run: ./apktool b out -o unsigned.apk
